@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aesthetic Photobooth</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Pacifico&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ffc8dd;
+            --secondary: #bde0fe;
+            --dark: #3d3d3d;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8f9fa;
+            color: var(--dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            font-family: 'Pacifico', cursive;
+            color: #ff8fab;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            max-width: 1000px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* Booth Section */
+        .booth-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--white);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
+
+        #video-container {
+            position: relative;
+            width: 400px;
+            height: 300px;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 8px solid var(--secondary);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror Effect */
+        }
+
+        #countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 80px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+            display: none;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-start { background-color: #ff8fab; color: white; }
+        .btn-start:hover { background-color: #fb6f92; transform: translateY(-2px); }
+        .btn-download { background-color: var(--secondary); color: var(--dark); display: none; }
+
+        /* Preview Section */
+        .preview-section {
+            background: var(--white);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        #photostrip-canvas {
+            display: none; /* Hidden source canvas */
+        }
+
+        .strip-preview {
+            width: 160px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .strip-preview img {
+            width: 100%;
+            height: auto;
+            border: 1px solid #eee;
+        }
+
+        .frame-selector {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .frame-opt {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .frame-opt.active { border-color: var(--dark); }
+    </style>
+</head>
+<body>
+
+    <h1>K-Photo Booth</h1>
+    <p>Ambil 4 foto seru dengan gaya ala Korea!</p>
+
+    <div class="container">
+        <div class="booth-section">
+            <div id="video-container">
+                <video id="video" autoplay playsinline></video>
+                <div id="countdown">3</div>
+            </div>
+
+            <div class="frame-selector">
+                <span>Pilih Warna Frame:</span>
+                <div class="frame-opt" style="background: white; border: 1px solid #ddd;" onclick="setFrame('#ffffff', this)"></div>
+                <div class="frame-opt" style="background: #ffc8dd;" onclick="setFrame('#ffc8dd', this)"></div>
+                <div class="frame-opt" style="background: #bde0fe;" onclick="setFrame('#bde0fe', this)"></div>
+                <div class="frame-opt" style="background: #cdb4db;" onclick="setFrame('#cdb4db', this)"></div>
+            </div>
+
+            <div class="controls">
+                <button class="btn-start" id="start-btn">Mulai Foto!</button>
+                <button class="btn-download" id="download-btn">Download Hasil</button>
+            </div>
+        </div>
+
+        <div class="preview-section" id="preview-area">
+            <p style="text-align: center; font-size: 0.8rem; margin-top: 0;">Preview Strip</p>
+            <div id="output-images" class="strip-preview">
+                <div style="height: 400px; display: flex; align-items: center; justify-content: center; color: #ccc;">
+                    Belum ada foto
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="photostrip-canvas" width="400" height="1300"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const startBtn = document.getElementById('start-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const countdownEl = document.getElementById('countdown');
+        const canvas = document.getElementById('photostrip-canvas');
+        const ctx = canvas.getContext('2d');
+        const outputDiv = document.getElementById('output-images');
+
+        let photosTaken = [];
+        let currentFrameColor = '#ffffff';
+
+        // 1. Akses Kamera
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Mohon izinkan akses kamera untuk menggunakan photobooth.");
+            }
+        }
+
+        // 2. Pilih Warna Frame
+        function setFrame(color, el) {
+            currentFrameColor = color;
+            document.querySelectorAll('.frame-opt').forEach(opt => opt.classList.remove('active'));
+            el.classList.add('active');
+            outputDiv.style.backgroundColor = color;
+        }
+
+        // 3. Logika Pengambilan Foto
+        async function takePhotos() {
+            photosTaken = [];
+            startBtn.disabled = true;
+            startBtn.innerText = "Processing...";
+            outputDiv.innerHTML = ''; // Clear preview
+            outputDiv.style.backgroundColor = currentFrameColor;
+
+            for (let i = 0; i < 4; i++) {
+                await runCountdown(3);
+                captureFrame();
+            }
+
+            renderPhotostrip();
+            startBtn.disabled = false;
+            startBtn.innerText = "Foto Lagi";
+            downloadBtn.style.display = 'block';
+        }
+
+        function runCountdown(seconds) {
+            return new Promise(resolve => {
+                let count = seconds;
+                countdownEl.style.display = 'block';
+                countdownEl.innerText = count;
+
+                const timer = setInterval(() => {
+                    count--;
+                    if (count <= 0) {
+                        clearInterval(timer);
+                        countdownEl.style.display = 'none';
+                        resolve();
+                    } else {
+                        countdownEl.innerText = count;
+                    }
+                }, 1000);
+            });
+        }
+
+        function captureFrame() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 400;
+            tempCanvas.height = 300;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Mirror image processing
+            tempCtx.translate(tempCanvas.width, 0);
+            tempCtx.scale(-1, 1);
+            tempCtx.drawImage(video, 0, 0, 400, 300);
+            
+            const dataUrl = tempCanvas.toDataURL('image/png');
+            photosTaken.push(dataUrl);
+
+            // Tampilkan di preview samping secara instan
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            outputDiv.appendChild(img);
+        }
+
+        // 4. Render ke Canvas Akhir (Photostrip)
+        function renderPhotostrip() {
+            const padding = 20;
+            const imgW = 360;
+            const imgH = 270;
+            const footerH = 80;
+            
+            canvas.height = (imgH * 4) + (padding * 6) + footerH;
+            
+            // Background / Frame
+            ctx.fillStyle = currentFrameColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            photosTaken.forEach((src, index) => {
+                const img = new Image();
+                img.onload = () => {
+                    const yPos = padding + (index * (imgH + padding));
+                    ctx.drawImage(img, (canvas.width - imgW) / 2, yPos, imgW, imgH);
+                    
+                    // Tambahkan logo/teks di bawah jika sudah foto terakhir
+                    if (index === 3) {
+                        ctx.fillStyle = "#ff8fab";
+                        ctx.font = "bold 24px Pacifico";
+                        ctx.textAlign = "center";
+                        ctx.fillText("✨ Photo Booth ✨", canvas.width / 2, canvas.height - 40);
+                    }
+                };
+                img.src = src;
+            });
+        }
+
+        // 5. Download Fungsi
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'my-photostrip.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        startBtn.addEventListener('click', takePhotos);
+
+        // Jalankan kamera saat load
+        setupCamera();
+    </script>
+</body>
+</html>
